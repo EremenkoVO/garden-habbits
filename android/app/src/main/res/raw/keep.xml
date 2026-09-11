@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_habit,@drawable/ic_stat_leaf,@drawable/ic_stat_fitness,@drawable/ic_stat_water,@drawable/ic_stat_book,@drawable/ic_stat_meditation,@drawable/ic_stat_walk,@drawable/ic_stat_sleep,@drawable/ic_stat_health,@drawable/ic_stat_no_smoking,@drawable/ic_stat_no_alcohol,@drawable/ic_stat_no_food,@drawable/ic_stat_phone_off,@drawable/ic_stat_stop" />
