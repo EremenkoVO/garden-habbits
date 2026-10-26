@@ -7,17 +7,22 @@ import '../../core/habit_icons.dart';
 import '../../domain/habit.dart';
 
 class HabitCard extends StatelessWidget {
-  const HabitCard({super.key, required this.habit, required this.onEdit});
+  const HabitCard({
+    super.key,
+    required this.habit,
+    required this.date,
+    required this.onEdit,
+  });
 
   final Habit habit;
+  final DateTime date;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     final controller = context.watch<AppController>();
-    final today = DateTime.now();
-    final activeToday = habit.isActiveOn(today);
-    final completed = controller.isCompleted(habit.id!, today);
+    final activeOnDate = habit.isActiveOn(date);
+    final completed = controller.isCompleted(habit.id!, date);
     final stats = controller.statsFor(habit.id!);
     final color = Color(habit.colorValue);
     final habitIcon = habitIconByKey(habit.iconKey);
@@ -83,10 +88,12 @@ class HabitCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Semantics(
-                label: completed ? 'Отменить выполнение' : 'Выполнить сегодня',
+                label: completed
+                    ? 'Отменить выполнение за выбранный день'
+                    : 'Выполнить за выбранный день',
                 child: InkResponse(
-                  onTap: activeToday
-                      ? () => controller.toggle(habit, today)
+                  onTap: activeOnDate
+                      ? () => controller.toggle(habit, date)
                       : null,
                   radius: 28,
                   child: AnimatedContainer(
@@ -94,12 +101,19 @@ class HabitCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: completed ? color : color.withValues(alpha: 0.10),
+                      color: completed
+                          ? color
+                          : color.withValues(alpha: activeOnDate ? 0.10 : 0.04),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       completed ? Icons.check_rounded : Icons.circle_outlined,
-                      color: completed ? Colors.white : color,
+                      color: completed
+                          ? Colors.white
+                          : activeOnDate
+                          ? color
+                          : Theme.of(context).colorScheme.onSurface
+                                .withValues(alpha: 0.24),
                     ),
                   ),
                 ),

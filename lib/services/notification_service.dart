@@ -5,18 +5,11 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../core/date_utils.dart';
 import '../core/habit_icons.dart';
+import '../core/notification_payload.dart';
 import '../data/habit_repository.dart';
 import '../domain/habit.dart';
 
 const notificationCheckInActionId = 'check_in';
-
-int? habitIdFromNotificationPayload(String? payload) {
-  if (payload == null) return null;
-  final parts = payload.split(':');
-  if (parts.length != 2 || parts.first != 'habit') return null;
-  final habitId = int.tryParse(parts.last);
-  return habitId != null && habitId > 0 ? habitId : null;
-}
 
 @pragma('vm:entry-point')
 void notificationActionBackground(NotificationResponse response) async {
@@ -24,7 +17,9 @@ void notificationActionBackground(NotificationResponse response) async {
   final habitId = habitIdFromNotificationPayload(response.payload);
   if (habitId == null) return;
 
-  await HabitRepository().setCompleted(habitId, DateTime.now(), true);
+  final date = dateFromNotificationPayload(response.payload) ?? DateTime.now();
+  await HabitRepository().setCompleted(habitId, date, true);
+  await NotificationService.instance.cancelHabitForDate(habitId, date);
 }
 
 class NotificationService {
@@ -59,7 +54,10 @@ class NotificationService {
     return await android?.requestNotificationsPermission() ?? true;
   }
 
-  Future<void> scheduleHabit(Habit habit) async {
+  Future<void> scheduleHabit(
+    Habit habit, {
+    Set<String> completedDates = const {},
+  }) async {
     if (habit.id == null) return;
     await cancelHabit(habit.id!);
     if (!habit.reminderEnabled) return;
@@ -76,6 +74,7 @@ class NotificationService {
 
     var offset = 0;
     for (final day in daysBetween(firstDay, lastDay)) {
+      if (completedDates.contains(dateKey(day))) continue;
       for (final minutesOfDay in habit.reminderTimes) {
         final scheduled = tz.TZDateTime(
           tz.local,
@@ -109,7 +108,7 @@ class NotificationService {
             ),
           ),
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          payload: 'habit:${habit.id}',
+          payload: habitNotificationPayload(habit.id!, day),
         );
         offset++;
       }
@@ -119,7 +118,17 @@ class NotificationService {
   Future<void> cancelHabit(int habitId) async {
     final pending = await _plugin.pendingNotificationRequests();
     for (final notification in pending) {
-      if (notification.payload == 'habit:$habitId') {
+      if (habitIdFromNotificationPayload(notification.payload) == habitId) {
+        await _plugin.cancel(id: notification.id);
+      }
+    }
+  }
+
+  Future<void> cancelHabitForDate(int habitId, DateTime date) async {
+    final targetPayload = habitNotificationPayload(habitId, date);
+    final pending = await _plugin.pendingNotificationRequests();
+    for (final notification in pending) {
+      if (notification.payload == targetPayload) {
         await _plugin.cancel(id: notification.id);
       }
     }

@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../core/date_utils.dart';
 import '../data/habit_repository.dart';
 import 'notification_service.dart';
 
@@ -12,9 +13,18 @@ void backgroundDispatcher() {
     if (task != refreshRemindersTask) return true;
     WidgetsFlutterBinding.ensureInitialized();
     await NotificationService.instance.initialize();
-    final habits = await HabitRepository().getHabits();
+    final repository = HabitRepository();
+    final habits = await repository.getHabits();
+    final completions = await repository.getCompletions();
     for (final habit in habits.where((item) => item.reminderEnabled)) {
-      await NotificationService.instance.scheduleHabit(habit);
+      final completedDates = completions
+          .where((item) => item.habitId == habit.id)
+          .map((item) => dateKey(item.date))
+          .toSet();
+      await NotificationService.instance.scheduleHabit(
+        habit,
+        completedDates: completedDates,
+      );
     }
     return true;
   });

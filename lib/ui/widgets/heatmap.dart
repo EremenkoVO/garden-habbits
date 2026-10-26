@@ -8,7 +8,14 @@ import '../../app_controller.dart';
 import '../../core/date_utils.dart';
 
 class Heatmap extends StatelessWidget {
-  const Heatmap({super.key});
+  const Heatmap({
+    super.key,
+    required this.selectedDate,
+    required this.onDateSelected,
+  });
+
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +42,8 @@ class Heatmap extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Последние 12 недель',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -53,6 +59,9 @@ class Heatmap extends StatelessWidget {
                     child: Column(
                       children: List.generate(7, (weekday) {
                         final date = days[week * 7 + weekday];
+                        final isFuture = date.isAfter(today);
+                        final isSelected =
+                            dateKey(date) == dateKey(selectedDate);
                         final activeCount = controller.habits
                             .where((habit) => habit.isActiveOn(date))
                             .length;
@@ -60,26 +69,38 @@ class Heatmap extends StatelessWidget {
                         final intensity = activeCount == 0
                             ? 0.0
                             : math.min(done / activeCount, 1.0);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Tooltip(
-                            message:
-                                '${DateFormat('d MMMM', 'ru').format(date)}: $done',
-                            child: Container(
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: intensity == 0
-                                    ? colorScheme.surfaceContainerHighest
-                                    : Color.lerp(
-                                        primary.withValues(alpha: 0.22),
-                                        primary,
-                                        intensity,
-                                      ),
-                                borderRadius: BorderRadius.circular(5),
-                                border: dateKey(date) == dateKey(today)
-                                    ? Border.all(color: primary, width: 1.5)
-                                    : null,
+                        return GestureDetector(
+                          onTap: isFuture ? null : () => onDateSelected(date),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Tooltip(
+                              message: isFuture
+                                  ? 'Будущий день'
+                                  : '${DateFormat('d MMMM', 'ru').format(date)}: $done',
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: isFuture
+                                      ? colorScheme.surfaceContainerHighest
+                                            .withValues(alpha: 0.35)
+                                      : intensity == 0
+                                      ? colorScheme.surfaceContainerHighest
+                                      : Color.lerp(
+                                          primary.withValues(alpha: 0.22),
+                                          primary,
+                                          intensity,
+                                        ),
+                                  borderRadius: BorderRadius.circular(5),
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: colorScheme.onSurface,
+                                          width: 2,
+                                        )
+                                      : dateKey(date) == dateKey(today)
+                                      ? Border.all(color: primary, width: 1.5)
+                                      : null,
+                                ),
                               ),
                             ),
                           ),

@@ -23,6 +23,7 @@ class AppController extends ChangeNotifier {
   bool loading = true;
   Object? error;
   bool _didRefreshReminders = false;
+  Future<void>? _reminderRefresh;
 
   Future<void> load() async {
     loading = true;
@@ -33,7 +34,8 @@ class AppController extends ChangeNotifier {
       completions = await _repository.getCompletions();
       if (!_didRefreshReminders) {
         _didRefreshReminders = true;
-        unawaited(_refreshReminders());
+        _reminderRefresh = _refreshReminders();
+        unawaited(_reminderRefresh);
       }
     } on Object catch (caught) {
       error = caught;
@@ -46,7 +48,10 @@ class AppController extends ChangeNotifier {
   Future<void> _refreshReminders() async {
     try {
       for (final habit in habits.where((item) => item.reminderEnabled)) {
-        await _notifications.scheduleHabit(habit);
+        await _notifications.scheduleHabit(
+          habit,
+          completedDates: _completionDatesFor(habit.id!),
+        );
       }
     } on Object {
       _didRefreshReminders = false;
@@ -70,6 +75,11 @@ class AppController extends ChangeNotifier {
   int completionCount(DateTime date) =>
       completions.where((item) => dateKey(item.date) == dateKey(date)).length;
 
+  Set<String> _completionDatesFor(int habitId) => completions
+      .where((item) => item.habitId == habitId)
+      .map((item) => dateKey(item.date))
+      .toSet();
+
   HabitStats statsFor(int habitId) => HabitStats.fromCompletions(
     completions.where((item) => item.habitId == habitId),
   );
@@ -84,25 +94,46 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> toggle(Habit habit, DateTime date) async {
+    final day = dateOnly(date);
+    if (day.isAfter(dateOnly(DateTime.now())) || !habit.isActiveOn(day)) return;
     final id = habit.id!;
-    final completed = !isCompleted(id, date);
-    await _repository.setCompleted(id, date, completed);
+    final completed = !isCompleted(id, day);
+    await _repository.setCompleted(id, day, completed);
     if (completed) {
       completions.add(
-        Completion(habitId: id, date: date, completedAt: DateTime.now()),
+        Completion(habitId: id, date: day, completedAt: DateTime.now()),
       );
     } else {
       completions.removeWhere(
-        (item) => item.habitId == id && dateKey(item.date) == dateKey(date),
+        (item) => item.habitId == id && dateKey(item.date) == dateKey(day),
       );
     }
     notifyListeners();
+
+    if (habit.reminderEnabled && dateKey(day) == dateKey(DateTime.now())) {
+      try {
+        await _reminderRefresh;
+        if (completed) {
+          await _notifications.cancelHabitForDate(id, day);
+        } else {
+          await _notifications.scheduleHabit(
+            habit,
+            completedDates: _completionDatesFor(id),
+          );
+        }
+      } on Object {
+        // Completion is already saved; a later refresh will repair reminders.
+      }
+    }
   }
 
   Future<void> save(Habit habit) async {
     if (habit.reminderEnabled) await _notifications.requestPermission();
     final saved = await _repository.saveHabit(habit);
-    await _notifications.scheduleHabit(saved);
+    await _notifications.scheduleHabit(
+      saved,
+      completedDates: _completionDatesFor(saved.id!),
+    );
     await load();
   }
 
